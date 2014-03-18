@@ -1,0 +1,374 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"co",
+				"coffee-rails"
+			],
+			[
+				"do",
+				"do"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "console.c",
+			"settings":
+			{
+				"buffer_size": 5158,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"contents": "#include \"types.h\"\n#include \"param.h\"\n#include \"memlayout.h\"\n#include \"mmu.h\"\n#include \"proc.h\"\n#include \"defs.h\"\n#include \"x86.h\"\n#include \"elf.h\"\n\nint\nexec(char *path, char **argv)\n{\n  char *s, *last;\n  int i, off;\n  uint argc, sz, sp, ustack[3+MAXARG+1];\n  struct elfhdr elf;\n  struct inode *ip;\n  struct proghdr ph;\n  pde_t *pgdir, *oldpgdir;\n\n  if((ip = namei(path)) == 0)\n    return -1;\n  ilock(ip);\n  pgdir = 0;\n\n  // Check ELF header\n  if(readi(ip, (char*)&elf, 0, sizeof(elf)) < sizeof(elf))\n    goto bad;\n  if(elf.magic != ELF_MAGIC)\n    goto bad;\n\n  if((pgdir = setupkvm(kalloc)) == 0)\n    goto bad;\n\n  // Load program into memory.\n  sz = 0;\n  for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){\n    if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))\n      goto bad;\n    if(ph.type != ELF_PROG_LOAD)\n      continue;\n    if(ph.memsz < ph.filesz)\n      goto bad;\n    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)\n      goto bad;\n    if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)\n      goto bad;\n  }\n  iunlockput(ip);\n  ip = 0;\n\n  // Allocate two pages at the next page boundary.\n  // Make the first inaccessible.  Use the second as the user stack.\n  sz = PGROUNDUP(sz);\n  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)\n    goto bad;\n  clearpteu(pgdir, (char*)(sz - 2*PGSIZE));\n  sp = sz;\n\n  // Push argument strings, prepare rest of stack in ustack.\n  for(argc = 0; argv[argc]; argc++) {\n    if(argc >= MAXARG)\n      goto bad;\n    sp = (sp - (strlen(argv[argc]) + 1)) & ~3;\n    if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)\n      goto bad;\n    ustack[3+argc] = sp;\n  }\n  ustack[3+argc] = 0;\n\n  ustack[0] = 0xffffffff;  // fake return PC\n  ustack[1] = argc;\n  ustack[2] = sp - (argc+1)*4;  // argv pointer\n\n  sp -= (3+argc+1) * 4;\n  if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)\n    goto bad;\n\n  // Save program name for debugging.\n  for(last=s=path; *s; s++)\n    if(*s == '/')\n      last = s+1;\n  safestrcpy(proc->name, last, sizeof(proc->name));\n\n  // Commit to the user image.\n  oldpgdir = proc->pgdir;\n  proc->pgdir = pgdir;\n  proc->sz = sz;\n  proc->tf->eip = elf.entry;  // main\n  proc->tf->esp = sp;\n  switchuvm(proc);\n  freevm(oldpgdir);\n  return 0;\n\n bad:\n  if(pgdir)\n    freevm(pgdir);\n  if(ip)\n    iunlockput(ip);\n  return -1;\n}\n",
+			"file": "exec.c",
+			"file_size": 2313,
+			"file_write_time": 1394632587000000,
+			"settings":
+			{
+				"buffer_size": 2313,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/home/oron/.config/sublime-text-2/Packages/Find Function Definition/go2function.sublime-settings",
+			"settings":
+			{
+				"buffer_size": 360,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "init.c",
+			"settings":
+			{
+				"buffer_size": 649,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"contents": "// Shell.\n\n#include \"types.h\"\n#include \"user.h\"\n#include \"fcntl.h\"\n\n// Parsed command representation\n#define EXEC  1\n#define REDIR 2\n#define PIPE  3\n#define LIST  4\n#define BACK  5\n\n#define MAXARGS 10\n\nstruct cmd {\n  int type;\n};\n\nstruct execcmd {\n  int type;\n  char *argv[MAXARGS];\n  char *eargv[MAXARGS];\n};\n\nstruct redircmd {\n  int type;\n  struct cmd *cmd;\n  char *file;\n  char *efile;\n  int mode;\n  int fd;\n};\n\nstruct pipecmd {\n  int type;\n  struct cmd *left;\n  struct cmd *right;\n};\n\nstruct listcmd {\n  int type;\n  struct cmd *left;\n  struct cmd *right;\n};\n\nstruct backcmd {\n  int type;\n  struct cmd *cmd;\n};\n\nint fork1(void);  // Fork but panics on failure.\nvoid panic(char*);\nstruct cmd *parsecmd(char*);\n\n// Execute cmd.  Never returns.\nvoid\nruncmd(struct cmd *cmd)\n{\n  int p[2];\n  struct backcmd *bcmd;\n  struct execcmd *ecmd;\n  struct listcmd *lcmd;\n  struct pipecmd *pcmd;\n  struct redircmd *rcmd;\n\n  if(cmd == 0)\n    exit();\n  \n  switch(cmd->type){\n  default:\n    panic(\"runcmd\");\n\n  case EXEC:\n    ecmd = (struct execcmd*)cmd;\n    if(ecmd->argv[0] == 0)\n      exit();\n    exec(ecmd->argv[0], ecmd->argv);\n    printf(2, \"exec %s failed\\n\", ecmd->argv[0]);\n    break;\n\n  case REDIR:\n    rcmd = (struct redircmd*)cmd;\n    close(rcmd->fd);\n    if(open(rcmd->file, rcmd->mode) < 0){\n      printf(2, \"open %s failed\\n\", rcmd->file);\n      exit();\n    }\n    runcmd(rcmd->cmd);\n    break;\n\n  case LIST:\n    lcmd = (struct listcmd*)cmd;\n    if(fork1() == 0)\n      runcmd(lcmd->left);\n    wait();\n    runcmd(lcmd->right);\n    break;\n\n  case PIPE:\n    pcmd = (struct pipecmd*)cmd;\n    if(pipe(p) < 0)\n      panic(\"pipe\");\n    if(fork1() == 0){\n      close(1);\n      dup(p[1]);\n      close(p[0]);\n      close(p[1]);\n      runcmd(pcmd->left);\n    }\n    if(fork1() == 0){\n      close(0);\n      dup(p[0]);\n      close(p[0]);\n      close(p[1]);\n      runcmd(pcmd->right);\n    }\n    close(p[0]);\n    close(p[1]);\n    wait();\n    wait();\n    break;\n    \n  case BACK:\n    bcmd = (struct backcmd*)cmd;\n    if(fork1() == 0)\n      runcmd(bcmd->cmd);\n    break;\n  }\n  exit();\n}\n\nint\ngetcmd(char *buf, int nbuf)\n{\n  printf(2, \"$ \");\n  memset(buf, 0, nbuf);\n  gets(buf, nbuf);\n  if(buf[0] == 0) // EOF\n    return -1;\n  return 0;\n}\n\nint\nmain(void)\n{\n  static char buf[100];\n  int fd;\n  \n  // Assumes three file descriptors open.\n  while((fd = open(\"console\", O_RDWR)) >= 0){\n    if(fd >= 3){\n      close(fd);\n      break;\n    }\n  }\n  \n  // Read and run input commands.\n  while(getcmd(buf, sizeof(buf)) >= 0){\n    if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){\n      // Clumsy but will have to do for now.\n      // Chdir has no effect on the parent if run in the child.\n      buf[strlen(buf)-1] = 0;  // chop \\n\n      if(chdir(buf+3) < 0)\n        printf(2, \"cannot cd %s\\n\", buf+3);\n      continue;\n    }\n    if(fork1() == 0)\n      runcmd(parsecmd(buf));\n    wait();\n  }\n  exit();\n}\n\nvoid\npanic(char *s)\n{\n  printf(2, \"%s\\n\", s);\n  exit();\n}\n\nint\nfork1(void)\n{\n  int pid;\n  \n  pid = fork();\n  if(pid == -1)\n    panic(\"fork\");\n  return pid;\n}\n\n//PAGEBREAK!\n// Constructors\n\nstruct cmd*\nexeccmd(void)\n{\n  struct execcmd *cmd;\n\n  cmd = malloc(sizeof(*cmd));\n  memset(cmd, 0, sizeof(*cmd));\n  cmd->type = EXEC;\n  return (struct cmd*)cmd;\n}\n\nstruct cmd*\nredircmd(struct cmd *subcmd, char *file, char *efile, int mode, int fd)\n{\n  struct redircmd *cmd;\n\n  cmd = malloc(sizeof(*cmd));\n  memset(cmd, 0, sizeof(*cmd));\n  cmd->type = REDIR;\n  cmd->cmd = subcmd;\n  cmd->file = file;\n  cmd->efile = efile;\n  cmd->mode = mode;\n  cmd->fd = fd;\n  return (struct cmd*)cmd;\n}\n\nstruct cmd*\npipecmd(struct cmd *left, struct cmd *right)\n{\n  struct pipecmd *cmd;\n\n  cmd = malloc(sizeof(*cmd));\n  memset(cmd, 0, sizeof(*cmd));\n  cmd->type = PIPE;\n  cmd->left = left;\n  cmd->right = right;\n  return (struct cmd*)cmd;\n}\n\nstruct cmd*\nlistcmd(struct cmd *left, struct cmd *right)\n{\n  struct listcmd *cmd;\n\n  cmd = malloc(sizeof(*cmd));\n  memset(cmd, 0, sizeof(*cmd));\n  cmd->type = LIST;\n  cmd->left = left;\n  cmd->right = right;\n  return (struct cmd*)cmd;\n}\n\nstruct cmd*\nbackcmd(struct cmd *subcmd)\n{\n  struct backcmd *cmd;\n\n  cmd = malloc(sizeof(*cmd));\n  memset(cmd, 0, sizeof(*cmd));\n  cmd->type = BACK;\n  cmd->cmd = subcmd;\n  return (struct cmd*)cmd;\n}\n//PAGEBREAK!\n// Parsing\n\nchar whitespace[] = \" \\t\\r\\n\\v\";\nchar symbols[] = \"<|>&;()\";\n\nint\ngettoken(char **ps, char *es, char **q, char **eq)\n{\n  char *s;\n  int ret;\n  \n  s = *ps;\n  while(s < es && strchr(whitespace, *s))\n    s++;\n  if(q)\n    *q = s;\n  ret = *s;\n  switch(*s){\n  case 0:\n    break;\n  case '|':\n  case '(':\n  case ')':\n  case ';':\n  case '&':\n  case '<':\n    s++;\n    break;\n  case '>':\n    s++;\n    if(*s == '>'){\n      ret = '+';\n      s++;\n    }\n    break;\n  default:\n    ret = 'a';\n    while(s < es && !strchr(whitespace, *s) && !strchr(symbols, *s))\n      s++;\n    break;\n  }\n  if(eq)\n    *eq = s;\n  \n  while(s < es && strchr(whitespace, *s))\n    s++;\n  *ps = s;\n  return ret;\n}\n\nint\npeek(char **ps, char *es, char *toks)\n{\n  char *s;\n  \n  s = *ps;\n  while(s < es && strchr(whitespace, *s))\n    s++;\n  *ps = s;\n  return *s && strchr(toks, *s);\n}\n\nstruct cmd *parseline(char**, char*);\nstruct cmd *parsepipe(char**, char*);\nstruct cmd *parseexec(char**, char*);\nstruct cmd *nulterminate(struct cmd*);\n\nstruct cmd*\nparsecmd(char *s)\n{\n  char *es;\n  struct cmd *cmd;\n\n  es = s + strlen(s);\n  cmd = parseline(&s, es);\n  peek(&s, es, \"\");\n  if(s != es){\n    printf(2, \"leftovers: %s\\n\", s);\n    panic(\"syntax\");\n  }\n  nulterminate(cmd);\n  return cmd;\n}\n\nstruct cmd*\nparseline(char **ps, char *es)\n{\n  struct cmd *cmd;\n\n  cmd = parsepipe(ps, es);\n  while(peek(ps, es, \"&\")){\n    gettoken(ps, es, 0, 0);\n    cmd = backcmd(cmd);\n  }\n  if(peek(ps, es, \";\")){\n    gettoken(ps, es, 0, 0);\n    cmd = listcmd(cmd, parseline(ps, es));\n  }\n  return cmd;\n}\n\nstruct cmd*\nparsepipe(char **ps, char *es)\n{\n  struct cmd *cmd;\n\n  cmd = parseexec(ps, es);\n  if(peek(ps, es, \"|\")){\n    gettoken(ps, es, 0, 0);\n    cmd = pipecmd(cmd, parsepipe(ps, es));\n  }\n  return cmd;\n}\n\nstruct cmd*\nparseredirs(struct cmd *cmd, char **ps, char *es)\n{\n  int tok;\n  char *q, *eq;\n\n  while(peek(ps, es, \"<>\")){\n    tok = gettoken(ps, es, 0, 0);\n    if(gettoken(ps, es, &q, &eq) != 'a')\n      panic(\"missing file for redirection\");\n    switch(tok){\n    case '<':\n      cmd = redircmd(cmd, q, eq, O_RDONLY, 0);\n      break;\n    case '>':\n      cmd = redircmd(cmd, q, eq, O_WRONLY|O_CREATE, 1);\n      break;\n    case '+':  // >>\n      cmd = redircmd(cmd, q, eq, O_WRONLY|O_CREATE, 1);\n      break;\n    }\n  }\n  return cmd;\n}\n\nstruct cmd*\nparseblock(char **ps, char *es)\n{\n  struct cmd *cmd;\n\n  if(!peek(ps, es, \"(\"))\n    panic(\"parseblock\");\n  gettoken(ps, es, 0, 0);\n  cmd = parseline(ps, es);\n  if(!peek(ps, es, \")\"))\n    panic(\"syntax - missing )\");\n  gettoken(ps, es, 0, 0);\n  cmd = parseredirs(cmd, ps, es);\n  return cmd;\n}\n\nstruct cmd*\nparseexec(char **ps, char *es)\n{\n  char *q, *eq;\n  int tok, argc;\n  struct execcmd *cmd;\n  struct cmd *ret;\n  \n  if(peek(ps, es, \"(\"))\n    return parseblock(ps, es);\n\n  ret = execcmd();\n  cmd = (struct execcmd*)ret;\n\n  argc = 0;\n  ret = parseredirs(ret, ps, es);\n  while(!peek(ps, es, \"|)&;\")){\n    if((tok=gettoken(ps, es, &q, &eq)) == 0)\n      break;\n    if(tok != 'a')\n      panic(\"syntax\");\n    cmd->argv[argc] = q;\n    cmd->eargv[argc] = eq;\n    argc++;\n    if(argc >= MAXARGS)\n      panic(\"too many args\");\n    ret = parseredirs(ret, ps, es);\n  }\n  cmd->argv[argc] = 0;\n  cmd->eargv[argc] = 0;\n  return ret;\n}\n\n// NUL-terminate all the counted strings.\nstruct cmd*\nnulterminate(struct cmd *cmd)\n{\n  int i;\n  struct backcmd *bcmd;\n  struct execcmd *ecmd;\n  struct listcmd *lcmd;\n  struct pipecmd *pcmd;\n  struct redircmd *rcmd;\n\n  if(cmd == 0)\n    return 0;\n  \n  switch(cmd->type){\n  case EXEC:\n    ecmd = (struct execcmd*)cmd;\n    for(i=0; ecmd->argv[i]; i++)\n      *ecmd->eargv[i] = 0;\n    break;\n\n  case REDIR:\n    rcmd = (struct redircmd*)cmd;\n    nulterminate(rcmd->cmd);\n    *rcmd->efile = 0;\n    break;\n\n  case PIPE:\n    pcmd = (struct pipecmd*)cmd;\n    nulterminate(pcmd->left);\n    nulterminate(pcmd->right);\n    break;\n    \n  case LIST:\n    lcmd = (struct listcmd*)cmd;\n    nulterminate(lcmd->left);\n    nulterminate(lcmd->right);\n    break;\n\n  case BACK:\n    bcmd = (struct backcmd*)cmd;\n    nulterminate(bcmd->cmd);\n    break;\n  }\n  return cmd;\n}\ng",
+			"file": "sh.c",
+			"file_size": 8307,
+			"file_write_time": 1394632587000000,
+			"settings":
+			{
+				"buffer_size": 8308,
+				"line_ending": "Unix"
+			}
+		}
+	],
+	"build_system": "",
+	"command_palette":
+	{
+		"height": 369.0,
+		"selected_items":
+		[
+			[
+				"packa",
+				"Package Control: Install Package"
+			],
+			[
+				"pack",
+				"Package Control: Discover Packages"
+			],
+			[
+				"proj",
+				"Project: Save As"
+			]
+		],
+		"width": 449.0
+	},
+	"console":
+	{
+		"height": 139.0
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"file_history":
+	[
+		"/home/oron/os142/assignment1/xv6-ass1.sublime-workspace",
+		"/home/oron/os142/assignment1/_sh"
+	],
+	"find":
+	{
+		"height": 35.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+			"/home/oron/os142/assignment1",
+			"/home/oron/os142/assignment1/",
+			"/home/oron/os142/assignment1",
+			""
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"namei",
+			"exec",
+			"runcmd",
+			"parsecmd",
+			"runcmd",
+			"freevm",
+			"return",
+			"bad command",
+			"10"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 1,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "console.c",
+					"settings":
+					{
+						"buffer_size": 5158,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "exec.c",
+					"settings":
+					{
+						"buffer_size": 2313,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								364,
+								364
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 22.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "/home/oron/.config/sublime-text-2/Packages/Find Function Definition/go2function.sublime-settings",
+					"settings":
+					{
+						"buffer_size": 360,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								185,
+								185
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JSON.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "init.c",
+					"settings":
+					{
+						"buffer_size": 649,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								179,
+								179
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "sh.c",
+					"settings":
+					{
+						"buffer_size": 8308,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								5850,
+								5850
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 5904.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 0.0
+	},
+	"input":
+	{
+		"height": 0.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"replace":
+	{
+		"height": 64.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"selected_items":
+		[
+			[
+				"",
+				"exec.c"
+			],
+			[
+				"sh.c",
+				"sh.c"
+			],
+			[
+				"init.",
+				"init.c"
+			],
+			[
+				"exec",
+				"exec.c"
+			],
+			[
+				"con",
+				"console.c"
+			]
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 500.0,
+		"selected_items":
+		[
+		],
+		"width": 380.0
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 150.0,
+	"status_bar_visible": true
+}
