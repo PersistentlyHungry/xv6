@@ -147,7 +147,7 @@
 	"groups":
 	[
 		{
-			"selected": 1,
+			"selected": 4,
 			"sheets":
 			[
 				{
@@ -190,8 +190,8 @@
 						"selection":
 						[
 							[
-								364,
-								364
+								319,
+								319
 							]
 						],
 						"settings":
@@ -201,7 +201,7 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 22.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
 					"type": "text"
@@ -246,8 +246,8 @@
 						"selection":
 						[
 							[
-								179,
-								179
+								646,
+								646
 							]
 						],
 						"settings":
@@ -335,6 +335,14 @@
 		"selected_items":
 		[
 			[
+				"s",
+				"sh.c"
+			],
+			[
+				"init",
+				"init.c"
+			],
+			[
 				"",
 				"exec.c"
 			],
@@ -362,6 +370,10 @@
 		"height": 500.0,
 		"selected_items":
 		[
+			[
+				"",
+				"/home/oron/os142/assignment1/question1.sublime-project"
+			]
 		],
 		"width": 380.0
 	},
