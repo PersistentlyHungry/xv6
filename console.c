@@ -124,6 +124,7 @@ panic(char *s)
 //PAGEBREAK: 50
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
+#define KEY_LF 0xE4
 static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
 static void
@@ -208,6 +209,13 @@ consoleintr(int (*getc)(void))
         consputc(BACKSPACE);
       }
       break;
+    case KEY_LF: // Key Left
+    {
+      input.e--;
+      //consputc(BACKSPACE);
+
+      break;
+    }
     default:
       if(c != 0 && input.e-input.r < INPUT_BUF){
         c = (c == '\r') ? '\n' : c;
@@ -220,6 +228,7 @@ consoleintr(int (*getc)(void))
       }
       break;
     }
+    cprintf("buf %s, read %d, write %d, edit %d\n",input.buf,input.r,input.w,input.e);
   }
   release(&input.lock);
 }
