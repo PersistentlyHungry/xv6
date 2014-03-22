@@ -32,6 +32,7 @@ exec(char *path, char **argv)
     for(i=0;i<path_variable_count;i++)
     {
       //If the path is not in pwd, look for it in one of the path_variable
+      // Yuval git check
       safestrcpy(tempPath, path_variable[i], INPUT_BUF);
       safestrcpy(&tempPath[strlen(tempPath)],path,(strlen(path)));
       if((ip = namei(tempPath)) != 0)
