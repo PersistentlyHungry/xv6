@@ -31,10 +31,9 @@ exec(char *path, char **argv)
   if((ip = namei(path)) == 0)
     for(i=0;i<path_variable_count;i++)
     {
-      //
+      //If the path is not in pwd, look for it in one of the path_variable
       safestrcpy(tempPath, path_variable[i], INPUT_BUF);
       safestrcpy(&tempPath[strlen(tempPath)],path,(strlen(path)));
-      //panic(tempPath);
       if((ip = namei(tempPath)) != 0)
       {
         continue;
