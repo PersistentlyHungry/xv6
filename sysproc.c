@@ -6,6 +6,7 @@
 #include "mmu.h"
 #include "proc.h"
 
+
 int
 sys_fork(void)
 {
@@ -87,4 +88,16 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// return 0 upon successfull adding of path,
+// -1 upon failure
+int
+sys_add_path(void)
+{
+  char* path;
+   if(argstr(0, &path) < 0)
+    return -1;
+  //return 0;
+  return add_path(path);
 }

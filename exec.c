@@ -12,14 +12,13 @@
 #define INPUT_BUF 129 
 
 char path_variable[MAX_PATH_ENTRIES][INPUT_BUF];
-int path_variable_count = 1;
+int path_variable_count = 0;
 
 int
 exec(char *path, char **argv)
 {
-  safestrcpy(path_variable[0],"/os/",sizeof(path_variable[0]));
   char *s, *last;
-  int i, off;
+  int i, off;   
   uint argc, sz, sp, ustack[3+MAXARG+1];
   struct elfhdr elf;
   struct inode *ip;
@@ -29,17 +28,19 @@ exec(char *path, char **argv)
   pde_t *pgdir, *oldpgdir;
 
   if((ip = namei(path)) == 0)
+  {
     for(i=0;i<path_variable_count;i++)
     {
       //If the path is not in pwd, look for it in one of the path_variable
       // Yuval git check
       safestrcpy(tempPath, path_variable[i], INPUT_BUF);
-      safestrcpy(&tempPath[strlen(tempPath)],path,(strlen(path)));
+      safestrcpy(&tempPath[strlen(tempPath)],path,(strlen(path)+1));
       if((ip = namei(tempPath)) != 0)
       {
         continue;
       }
     }
+  }
   if(ip==0)
       return -1;
   ilock(ip);
@@ -120,4 +121,14 @@ exec(char *path, char **argv)
   if(ip)
     iunlockput(ip);
   return -1;
+}
+
+int
+add_path(char* path)
+{
+  if(path_variable_count>=MAX_PATH_ENTRIES)
+    return -1;
+  safestrcpy(path_variable[path_variable_count],path,strlen(path)+1);
+  path_variable_count++;
+  return 0;
 }

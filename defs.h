@@ -22,6 +22,7 @@ void            panic(char*) __attribute__((noreturn));
 
 // exec.c
 int             exec(char*, char**);
+int 			add_path(char* path);
 
 // file.c
 struct file*    filealloc(void);
