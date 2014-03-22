@@ -1,3 +1,9 @@
 .svn/
 *.o
 Makefile
+*.sym
+*.asm
+_*
+initcode.out
+bootblock
+kernel
