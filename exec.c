@@ -7,19 +7,41 @@
 #include "x86.h"
 #include "elf.h"
 
+
+#define MAX_PATH_ENTRIES 10
+#define INPUT_BUF 129 
+
+char path_variable[MAX_PATH_ENTRIES][INPUT_BUF];
+int path_variable_count = 1;
+
 int
 exec(char *path, char **argv)
 {
+  safestrcpy(path_variable[0],"/os/",sizeof(path_variable[0]));
   char *s, *last;
   int i, off;
   uint argc, sz, sp, ustack[3+MAXARG+1];
   struct elfhdr elf;
   struct inode *ip;
   struct proghdr ph;
+  int pathLength = strlen(path);
+  char tempPath[pathLength+INPUT_BUF];
   pde_t *pgdir, *oldpgdir;
 
   if((ip = namei(path)) == 0)
-    return -1;
+    for(i=0;i<path_variable_count;i++)
+    {
+      //
+      safestrcpy(tempPath, path_variable[i], INPUT_BUF);
+      safestrcpy(&tempPath[strlen(tempPath)],path,(strlen(path)));
+      //panic(tempPath);
+      if((ip = namei(tempPath)) != 0)
+      {
+        continue;
+      }
+    }
+  if(ip==0)
+      return -1;
   ilock(ip);
   pgdir = 0;
 
