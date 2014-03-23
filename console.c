@@ -140,7 +140,7 @@ cgaputc(int c)
 
   if(c == '\n')
     pos += 80 - pos%80;
-  else if(c == BACKSPACE){
+  else if(c == BACKSPACE || c==KEY_LF){
     if(pos > 0) --pos;
   } else
     crt[pos++] = (c&0xff) | 0x0700;  // black on white
@@ -155,7 +155,8 @@ cgaputc(int c)
   outb(CRTPORT+1, pos>>8);
   outb(CRTPORT, 15);
   outb(CRTPORT+1, pos);
-  crt[pos] = ' ' | 0x0700;
+  if(c == BACKSPACE)
+    crt[pos] = ' ' | 0x0700;
 }
 
 void
@@ -181,6 +182,7 @@ struct {
   uint r;  // Read index
   uint w;  // Write index
   uint e;  // Edit index
+  uint f;  // final edit index - if press arrow-left this index save the rightest index
 } input;
 
 #define C(x)  ((x)-'@')  // Control-x
@@ -206,29 +208,39 @@ consoleintr(int (*getc)(void))
     case C('H'): case '\x7f':  // Backspace
       if(input.e != input.w){
         input.e--;
+        input.f--;
         consputc(BACKSPACE);
       }
       break;
     case KEY_LF: // Key Left
     {
-      input.e--;
-      //consputc(BACKSPACE);
+      if(input.e != input.w)
+      {
+        input.e--;
+        cgaputc(KEY_LF);
+      }
 
       break;
     }
     default:
-      if(c != 0 && input.e-input.r < INPUT_BUF){
+      if(c != 0 && input.f-input.r < INPUT_BUF){
         c = (c == '\r') ? '\n' : c;
         input.buf[input.e++ % INPUT_BUF] = c;
         consputc(c);
-        if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
+        if(input.e > input.f)
+        {
+          input.f = input.e;
+        }
+        if(c == '\n' || c == C('D') || input.f == input.r+INPUT_BUF){
+          cprintf("buf %s, read %d, write %d, edit %d\n final %d\n",input.buf,input.r,input.w,input.e, input.f);
+          input.e = input.f;
           input.w = input.e;
           wakeup(&input.r);
         }
       }
       break;
     }
-    cprintf("buf %s, read %d, write %d, edit %d\n",input.buf,input.r,input.w,input.e);
+   // cprintf("buf %s, read %d, write %d, edit %d\n final %d\n",input.buf,input.r,input.w,input.e, input.f);
   }
   release(&input.lock);
 }
