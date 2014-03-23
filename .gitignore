@@ -7,4 +7,5 @@ _*
 initcode.out
 bootblock
 kernel
-*.img
+xv6.img
+xv6-*
