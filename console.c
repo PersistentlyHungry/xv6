@@ -126,6 +126,8 @@ panic(char *s)
 #define CRTPORT 0x3d4
 #define KEY_LF 0xE4
 #define KEY_RT 0xE5
+#define KEY_UP 0xE2
+#define KEY_DN 0xE3
 static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
 static void
@@ -190,7 +192,44 @@ struct {
   uint f;  // Current edit index - Can move by arrows 
 } input;
 
+char History[20][INPUT_BUF];
+int HistoryPos = 0;
+int MaxHistoryPos = 0;
+int HistoryWrite = 0;
+
 #define C(x)  ((x)-'@')  // Control-x
+
+void SelectFromHistory()
+{
+  // Change the view
+      // Go to the right
+      while((input.e - input.f) > 0)
+      {
+        input.f++;
+        cgaputc(KEY_RT);
+      }
+      // Delete Current line
+      while(input.e > input.w)
+      {
+        cgaputc(BACKSPACE);
+        ++input.w; // Here also change the logic
+      }
+      input.e = input.w;
+      input.f = input.w;
+      input.r = input.w;
+
+      // Insert command from History
+      char Newc;
+      int j;
+      for(j = 0;  History[HistoryPos][j] != '\0'; ++j)
+      {
+        Newc = History[HistoryPos][j];
+
+        input.buf[input.f++ % INPUT_BUF] = Newc;
+        ++input.e;
+        consputc(Newc);
+      } 
+}
 
 void
 consoleintr(int (*getc)(void))
@@ -240,6 +279,26 @@ consoleintr(int (*getc)(void))
 
       break;
     }
+    case KEY_UP: // Key Up
+    {
+      int NextHistoryPos = (HistoryPos + 20 - 1) % 20;
+      if(NextHistoryPos < MaxHistoryPos)
+      {
+        HistoryPos = NextHistoryPos;
+        SelectFromHistory();
+      }
+      
+      break;
+    }
+    case KEY_DN: // Key Down
+    {
+      if(HistoryPos < MaxHistoryPos)
+      {
+        HistoryPos = (HistoryPos + 1) % 20;
+        SelectFromHistory();
+      }
+      break;
+    }
     default:
       if(c != 0 && input.e-input.r < INPUT_BUF)
       {
@@ -247,6 +306,20 @@ consoleintr(int (*getc)(void))
        
         if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF)
         {
+          // Insert Command To History
+          if(input.e > input.w) // if command exist
+          {
+            int j;
+            for(j = 0; input.w+j<input.e; ++j)
+            {
+              History[HistoryWrite][j] = input.buf[(input.w +j) % INPUT_BUF];
+            }
+            History[HistoryWrite][j] = '\0';
+            HistoryWrite = (HistoryWrite + 1) % 20;
+            MaxHistoryPos = (MaxHistoryPos == 20) ? 20 : (MaxHistoryPos + 1);
+            HistoryPos = HistoryWrite;
+          }  
+
           input.buf[input.e++ % INPUT_BUF] = c;
           input.f = input.e;
 
