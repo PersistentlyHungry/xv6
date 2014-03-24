@@ -9,3 +9,5 @@ bootblock
 kernel
 xv6.img
 xv6-*
+*.img
+mkfs
