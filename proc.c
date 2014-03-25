@@ -100,6 +100,8 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  p->ctime = ticks;
+  cprintf("init proccess start at %d ticks",ticks); //oron
 }
 
 // Grow current process's memory by n bytes.
@@ -156,6 +158,11 @@ fork(void)
  
   pid = np->pid;
   np->state = RUNNABLE;
+  np->ctime = ticks;
+  np->iotime = 0;
+  np-> rtime = 0;
+  np-> etime = 0;
+  cprintf("proc begin by forking at %d ticks",ticks);//oron
   safestrcpy(np->name, proc->name, sizeof(proc->name));
   return pid;
 }
@@ -199,14 +206,16 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   proc->state = ZOMBIE;
+  proc->etime= ticks;
+  cprintf("the process ended in %d ticks",ticks);//oron
   sched();
   panic("zombie exit");
 }
 
-// Wait for a child process to exit and return its pid.
+// Wait for a child process to exit and return its pid and its rtime, wtime and iotime.
 // Return -1 if this process has no children.
 int
-wait(void)
+wait2(int *wtime, int *rtime, int *iotime)
 {
   struct proc *p;
   int havekids, pid;
@@ -221,6 +230,9 @@ wait(void)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
+        *wtime = p->etime - p->ctime - p->rtime - p->iotime;
+        *rtime = p->rtime;
+        *iotime = p->iotime;
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
@@ -245,6 +257,16 @@ wait(void)
     sleep(proc, &ptable.lock);  //DOC: wait-sleep
   }
 }
+
+// Wait for a child process to exit and return its pid.
+// Return -1 if this process has no children.
+int
+wait(void)
+{
+  int garbage=0;
+  return wait2(&garbage, &garbage, &garbage);
+}
+
 
 void
 register_handler(sighandler_t sighandler)
@@ -403,6 +425,23 @@ wakeup1(void *chan)
     if(p->state == SLEEPING && p->chan == chan)
       p->state = RUNNABLE;
 }
+
+//PAGEBREAK!
+// look wether the process are RUNNING or SLEEPING
+void
+addiortime(void *chan)
+{
+  struct proc *p;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {
+    if(p->state==RUNNING)
+      p->rtime++;
+    else if(p->state==SLEEPING)
+      p->iotime++;
+    }
+}
+
 
 // Wake up all processes sleeping on chan.
 void

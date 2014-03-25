@@ -22,6 +22,7 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int wait2(int*, int*, int*);
 //int export(char*);
 int add_path(char*);
 

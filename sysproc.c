@@ -27,6 +27,27 @@ sys_wait(void)
 }
 
 int
+sys_wait2(void)
+{
+  int wtime;
+  int rtime;
+  int iotime;
+  int *pwtime;
+  int *prtime;
+  int *piotime;
+  if(argint(0,&wtime)<0)
+    return -1;
+  if(argint(1,&rtime)<0)
+    return -1;
+  if(argint(2,&iotime)<0)
+    return -1;
+  pwtime = (int *)wtime;
+  prtime = (int *)rtime;
+  piotime = (int *)iotime;
+  return wait2(pwtime, prtime, piotime);
+}
+
+int
 sys_kill(void)
 {
   int pid;

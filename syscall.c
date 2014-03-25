@@ -100,11 +100,13 @@ extern int sys_write(void);
 extern int sys_uptime(void);
 
 extern int sys_add_path(void);
+extern int sys_wait2(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
 [SYS_exit]    sys_exit,
 [SYS_wait]    sys_wait,
+[SYS_wait2]   sys_wait2,
 [SYS_pipe]    sys_pipe,
 [SYS_read]    sys_read,
 [SYS_kill]    sys_kill,
