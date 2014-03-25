@@ -1,6 +1,5 @@
 .svn/
 *.o
-Makefile
 *.sym
 *.asm
 _*

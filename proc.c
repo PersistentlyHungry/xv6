@@ -101,7 +101,6 @@ userinit(void)
 
   p->state = RUNNABLE;
   p->ctime = ticks;
-  cprintf("init proccess start at %d ticks",ticks); //oron
 }
 
 // Grow current process's memory by n bytes.
@@ -162,7 +161,6 @@ fork(void)
   np->iotime = 0;
   np-> rtime = 0;
   np-> etime = 0;
-  cprintf("proc begin by forking at %d ticks",ticks);//oron
   safestrcpy(np->name, proc->name, sizeof(proc->name));
   return pid;
 }
@@ -207,7 +205,6 @@ exit(void)
   // Jump into the scheduler, never to return.
   proc->state = ZOMBIE;
   proc->etime= ticks;
-  cprintf("the process ended in %d ticks",ticks);//oron
   sched();
   panic("zombie exit");
 }
