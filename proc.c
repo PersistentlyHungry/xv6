@@ -7,6 +7,23 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#ifdef SCHED_DEFAULT
+
+#endif
+
+#ifdef SCHED_FRR
+
+#endif
+
+#ifdef SCHED_FCFS
+
+#endif
+
+#ifdef SCHED_Q3
+
+#endif
+
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -69,7 +86,7 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
-
+  cprintf("%d",x);
   return p;
 }
 
