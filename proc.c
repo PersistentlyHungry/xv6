@@ -7,22 +7,14 @@
 #include "proc.h"
 #include "spinlock.h"
 
-#ifdef SCHED_DEFAULT
+#define QUEUESIZE NPROC
 
-#endif
-
-#ifdef SCHED_FRR
-
-#endif
-
-#ifdef SCHED_FCFS
-
-#endif
-
-#ifdef SCHED_Q3
-
-#endif
-
+struct {
+        struct proc * q[QUEUESIZE+1];   /* body of queue */
+        int first;                      /* position of first element */
+        int last;                       /* position of last element */
+        int count;                      /* number of queue elements */
+} pqueue;
 
 struct {
   struct spinlock lock;
@@ -41,6 +33,36 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+}
+
+void enqueue(struct proc * x)
+{
+
+
+#ifdef SCHED_FRR
+   // cprintf("enqueue process %d \n", x->pid);
+        if (pqueue.count >= QUEUESIZE)
+    cprintf("Warning: queue overflow enqueue ");
+        else {
+                pqueue.last = (pqueue.last+1) % QUEUESIZE;
+                pqueue.q[ pqueue.last ] = x;    
+                pqueue.count = pqueue.count + 1;
+        }
+ #endif       
+}
+
+struct proc * dequeue()
+{
+        struct proc * x;
+
+        if (pqueue.count <= 0) cprintf("Warning: empty queue dequeue.\n");
+        else {
+                x = pqueue.q[ pqueue.first ];
+                pqueue.first = (pqueue.first+1) % QUEUESIZE;
+                pqueue.count = pqueue.count - 1;
+        }
+
+        return(x);
 }
 
 //PAGEBREAK: 32
@@ -94,6 +116,11 @@ found:
 void
 userinit(void)
 {
+  // Init queue process
+  pqueue.first = 0;
+  pqueue.last = NPROC-1;
+  pqueue.count = 0;
+
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
   
@@ -117,6 +144,7 @@ userinit(void)
 
   p->state = RUNNABLE;
   p->ctime = ticks;
+  enqueue(p);
 }
 
 // Grow current process's memory by n bytes.
@@ -172,8 +200,10 @@ fork(void)
   np->cwd = idup(proc->cwd);
  
   pid = np->pid;
+
   np->state = RUNNABLE;
   np->ctime = ticks;
+  enqueue(np);
   np->iotime = 0;
   np-> rtime = 0;
   np-> etime = 0;
@@ -297,6 +327,64 @@ register_handler(sighandler_t sighandler)
   proc->tf->eip = (uint)sighandler;
 }
 
+#ifdef SCHED_DEFAULT
+
+struct proc* FirstProcess()
+{
+  return ptable.proc;
+}
+
+struct proc* NextProcess(struct proc *p)
+{
+  if(p < &ptable.proc[NPROC])
+  {
+    return ++p;
+  }
+  else
+  {
+    return 0;
+  }
+}
+
+#endif
+
+#ifdef SCHED_FRR
+struct proc* FirstProcess()
+{
+  if(pqueue.count == 0)
+  {
+    return 0;
+  }
+  else
+  {
+    return dequeue();
+  }
+}
+
+struct proc* NextProcess(struct proc *p)
+{
+  if(pqueue.count == 0)
+  {
+    return 0;
+  }
+  else
+  {
+    return dequeue();
+  }
+  
+}
+
+#endif
+
+#ifdef SCHED_FCFS
+
+
+#endif
+
+#ifdef SCHED_Q3
+
+
+#endif
 
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
@@ -317,27 +405,33 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+    p = FirstProcess();
+    while( p!= 0)
+    {
+      if(p->state == RUNNABLE)
+      {
+        //cprintf("Scheduler for %d \n", p->pid);
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      swtch(&cpu->scheduler, proc->context);
-      switchkvm();
+        swtch(&cpu->scheduler, proc->context);
+        switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      proc = 0;
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        proc = 0;
+      }
+      p = NextProcess(p);
     }
     release(&ptable.lock);
 
   }
 }
+
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state.
@@ -365,6 +459,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   proc->state = RUNNABLE;
+  enqueue(proc);
   sched();
   release(&ptable.lock);
 }
@@ -436,7 +531,10 @@ wakeup1(void *chan)
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan)
+    {
       p->state = RUNNABLE;
+      enqueue(p);
+    }
 }
 
 //PAGEBREAK!
@@ -479,7 +577,10 @@ kill(int pid)
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
+      {
         p->state = RUNNABLE;
+        enqueue(p);
+      }
       release(&ptable.lock);
       return 0;
     }
