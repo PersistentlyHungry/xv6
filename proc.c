@@ -39,7 +39,7 @@ void enqueue(struct proc * x)
 {
 
 
-#ifdef SCHED_FRR
+#if defined (SCHED_FRR)  || defined (SCHED_FCFS)
    // cprintf("enqueue process %d \n", x->pid);
         if (pqueue.count >= QUEUESIZE)
     cprintf("Warning: queue overflow enqueue ");
@@ -327,7 +327,7 @@ register_handler(sighandler_t sighandler)
   proc->tf->eip = (uint)sighandler;
 }
 
-#ifdef SCHED_DEFAULT
+#if defined (SCHED_DEFAULT)
 
 struct proc* FirstProcess()
 {
@@ -348,7 +348,7 @@ struct proc* NextProcess(struct proc *p)
 
 #endif
 
-#ifdef SCHED_FRR
+#if defined (SCHED_FRR)  || defined (SCHED_FCFS)
 struct proc* FirstProcess()
 {
   if(pqueue.count == 0)
@@ -376,10 +376,7 @@ struct proc* NextProcess(struct proc *p)
 
 #endif
 
-#ifdef SCHED_FCFS
 
-
-#endif
 
 #ifdef SCHED_Q3
 
