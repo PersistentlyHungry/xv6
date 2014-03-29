@@ -10,6 +10,7 @@
 #define QUEUESIZE NPROC
 
 struct {
+        struct spinlock lock;
         struct proc * q[QUEUESIZE+1];   /* body of queue */
         int first;                      /* position of first element */
         int last;                       /* position of last element */
@@ -33,6 +34,13 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+
+
+  // Init queue process
+  initlock(&pqueue.lock, "pqueue");
+  pqueue.first = 0;
+  pqueue.last = NPROC-1;
+  pqueue.count = 0;
 }
 
 void enqueue(struct proc * x)
@@ -40,19 +48,23 @@ void enqueue(struct proc * x)
 
 
 #if defined (SCHED_FRR)  || defined (SCHED_FCFS)
+        acquire(&pqueue.lock);
    // cprintf("enqueue process %d \n", x->pid);
         if (pqueue.count >= QUEUESIZE)
-    cprintf("Warning: queue overflow enqueue ");
+              cprintf("Warning: queue overflow enqueue ");
         else {
                 pqueue.last = (pqueue.last+1) % QUEUESIZE;
-                pqueue.q[ pqueue.last ] = x;    
+                pqueue.q[ pqueue.last ] = x;  
+                
                 pqueue.count = pqueue.count + 1;
         }
+        release(&pqueue.lock);
  #endif       
 }
 
 struct proc * dequeue()
 {
+        acquire(&pqueue.lock);
         struct proc * x;
 
         if (pqueue.count <= 0) cprintf("Warning: empty queue dequeue.\n");
@@ -61,7 +73,7 @@ struct proc * dequeue()
                 pqueue.first = (pqueue.first+1) % QUEUESIZE;
                 pqueue.count = pqueue.count - 1;
         }
-
+        release(&pqueue.lock);
         return(x);
 }
 
@@ -116,11 +128,6 @@ found:
 void
 userinit(void)
 {
-  // Init queue process
-  pqueue.first = 0;
-  pqueue.last = NPROC-1;
-  pqueue.count = 0;
-
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
   
@@ -208,6 +215,7 @@ fork(void)
   np-> rtime = 0;
   np-> etime = 0;
   safestrcpy(np->name, proc->name, sizeof(proc->name));
+  
   return pid;
 }
 
@@ -403,19 +411,19 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     p = FirstProcess();
-    while( p!= 0)
+    while( p!= 0 )
     {
       if(p->state == RUNNABLE)
       {
-        //cprintf("Scheduler for %d \n", p->pid);
         // Switch to chosen process.  It is the process's job
         // to release ptable.lock and then reacquire it
         // before jumping back to us.
         proc = p;
         switchuvm(p);
         p->state = RUNNING;
-
+       // cprintf("Before Scheduler for %d \n", p->pid);
         swtch(&cpu->scheduler, proc->context);
+        //cprintf("After Scheduler for %d \n", p->pid);
         switchkvm();
 
         // Process is done running for now.
@@ -456,6 +464,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   proc->state = RUNNABLE;
+ // cprintf("yeild for %d \n", proc->pid);
   enqueue(proc);
   sched();
   release(&ptable.lock);
