@@ -7,22 +7,14 @@
 #include "proc.h"
 #include "spinlock.h"
 
-#ifdef SCHED_DEFAULT
+#define QUEUESIZE NPROC
 
-#endif
-
-#ifdef SCHED_FRR
-
-#endif
-
-#ifdef SCHED_FCFS
-
-#endif
-
-#ifdef SCHED_Q3
-
-#endif
-
+struct {
+        struct proc * q[QUEUESIZE+1];   /* body of queue */
+        int first;                      /* position of first element */
+        int last;                       /* position of last element */
+        int count;                      /* number of queue elements */
+} pqueue;
 
 struct {
   struct spinlock lock;
@@ -41,6 +33,31 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+}
+
+void enqueue(struct proc * x)
+{
+        if (pqueue.count >= QUEUESIZE)
+    cprintf("Warning: queue overflow enqueue ");
+        else {
+                pqueue.last = (pqueue.last+1) % QUEUESIZE;
+                pqueue.q[ pqueue.last ] = x;    
+                pqueue.count = pqueue.count + 1;
+        }
+}
+
+struct proc * dequeue()
+{
+        struct proc * x;
+
+        if (pqueue.count <= 0) cprintf("Warning: empty queue dequeue.\n");
+        else {
+                x = pqueue.q[ pqueue.first ];
+                pqueue.first = (pqueue.first+1) % QUEUESIZE;
+                pqueue.count = pqueue.count - 1;
+        }
+
+        return(x);
 }
 
 //PAGEBREAK: 32
@@ -94,6 +111,11 @@ found:
 void
 userinit(void)
 {
+  // Init queue process
+  pqueue.first = 0;
+  pqueue.last = NPROC-1;
+  pqueue.count = 0;
+
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
   
@@ -117,6 +139,7 @@ userinit(void)
 
   p->state = RUNNABLE;
   p->ctime = ticks;
+  enqueue(p);
 }
 
 // Grow current process's memory by n bytes.
@@ -174,6 +197,7 @@ fork(void)
   pid = np->pid;
   np->state = RUNNABLE;
   np->ctime = ticks;
+  enqueue(np);
   np->iotime = 0;
   np-> rtime = 0;
   np-> etime = 0;
@@ -297,6 +321,54 @@ register_handler(sighandler_t sighandler)
   proc->tf->eip = (uint)sighandler;
 }
 
+#ifdef SCHED_DEFAULT
+
+struct proc* FirstProcess()
+{
+  return ptable.proc;
+}
+
+struct proc* NextProcess(struct proc **p)
+{
+  if(*p < &ptable.proc[NPROC])
+  {
+    ++(*p);
+    return *p;
+  }
+  else
+  {
+    return 0;
+  }
+}
+
+#endif
+
+#ifdef SCHED_FRR
+struct proc* FirstProcess()
+{
+  return dequeue();
+}
+
+struct proc* NextProcess(struct proc **p)
+{
+  if ((*p)->state != UNUSED)
+  {
+    enqueue(*p);
+  }
+  return dequeue();
+}
+
+#endif
+
+#ifdef SCHED_FCFS
+
+
+#endif
+
+#ifdef SCHED_Q3
+
+
+#endif
 
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
@@ -317,7 +389,8 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    p = FirstProcess();
+    do{
       if(p->state != RUNNABLE)
         continue;
 
@@ -334,10 +407,12 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       proc = 0;
     }
+    while(NextProcess(&p) != 0);
     release(&ptable.lock);
 
   }
 }
+
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state.
