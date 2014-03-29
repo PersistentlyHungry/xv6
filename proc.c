@@ -37,6 +37,10 @@ pinit(void)
 
 void enqueue(struct proc * x)
 {
+
+
+#ifdef SCHED_FRR
+   // cprintf("enqueue process %d \n", x->pid);
         if (pqueue.count >= QUEUESIZE)
     cprintf("Warning: queue overflow enqueue ");
         else {
@@ -44,6 +48,7 @@ void enqueue(struct proc * x)
                 pqueue.q[ pqueue.last ] = x;    
                 pqueue.count = pqueue.count + 1;
         }
+ #endif       
 }
 
 struct proc * dequeue()
@@ -195,6 +200,7 @@ fork(void)
   np->cwd = idup(proc->cwd);
  
   pid = np->pid;
+
   np->state = RUNNABLE;
   np->ctime = ticks;
   enqueue(np);
@@ -328,12 +334,11 @@ struct proc* FirstProcess()
   return ptable.proc;
 }
 
-struct proc* NextProcess(struct proc **p)
+struct proc* NextProcess(struct proc *p)
 {
-  if(*p < &ptable.proc[NPROC])
+  if(p < &ptable.proc[NPROC])
   {
-    ++(*p);
-    return *p;
+    return ++p;
   }
   else
   {
@@ -346,16 +351,27 @@ struct proc* NextProcess(struct proc **p)
 #ifdef SCHED_FRR
 struct proc* FirstProcess()
 {
-  return dequeue();
+  if(pqueue.count == 0)
+  {
+    return 0;
+  }
+  else
+  {
+    return dequeue();
+  }
 }
 
-struct proc* NextProcess(struct proc **p)
+struct proc* NextProcess(struct proc *p)
 {
-  if ((*p)->state != UNUSED)
+  if(pqueue.count == 0)
   {
-    enqueue(*p);
+    return 0;
   }
-  return dequeue();
+  else
+  {
+    return dequeue();
+  }
+  
 }
 
 #endif
@@ -390,24 +406,27 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     p = FirstProcess();
-    do{
-      if(p->state != RUNNABLE)
-        continue;
+    while( p!= 0)
+    {
+      if(p->state == RUNNABLE)
+      {
+        //cprintf("Scheduler for %d \n", p->pid);
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      swtch(&cpu->scheduler, proc->context);
-      switchkvm();
+        swtch(&cpu->scheduler, proc->context);
+        switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      proc = 0;
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        proc = 0;
+      }
+      p = NextProcess(p);
     }
-    while(NextProcess(&p) != 0);
     release(&ptable.lock);
 
   }
@@ -440,6 +459,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   proc->state = RUNNABLE;
+  enqueue(proc);
   sched();
   release(&ptable.lock);
 }
@@ -511,7 +531,10 @@ wakeup1(void *chan)
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan)
+    {
       p->state = RUNNABLE;
+      enqueue(p);
+    }
 }
 
 //PAGEBREAK!
@@ -554,7 +577,10 @@ kill(int pid)
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
+      {
         p->state = RUNNABLE;
+        enqueue(p);
+      }
       release(&ptable.lock);
       return 0;
     }
