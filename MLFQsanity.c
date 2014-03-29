@@ -75,15 +75,15 @@ mlfqtest(void)
   }    
   
   printf(1, "Average: Wtime - %d, Rtime - %d, TAtime - %d\n",
-      wTimeAverage[0]/N,rTimeAverage[0]/N, ioTimeAverage[0]/N);
+      wTimeAverage[0]/N,rTimeAverage[0]/N, (wTimeAverage[0]+rTimeAverage[0]+ioTimeAverage[0])/N);
   printf(1, "Average Low Piriority: Wtime - %d, Rtime - %d, TAtime - %d\n",
-      wTimeAverage[1]/(N/2),rTimeAverage[1]/(N/2), ioTimeAverage[1]/(N/2));
+      wTimeAverage[1]/(N/2),rTimeAverage[1]/(N/2), (wTimeAverage[1]+rTimeAverage[1]+ioTimeAverage[1])/N);
   printf(1, "Average High Piriority: Wtime - %d, Rtime - %d, TAtime - %d\n",
-      wTimeAverage[2]/N,rTimeAverage[2]/N, ioTimeAverage[2]/N);
+      wTimeAverage[2]/N,rTimeAverage[2]/N, (wTimeAverage[2]+rTimeAverage[2]+ioTimeAverage[2])/N);
   for(i=0; i<N; i++)
   {
     printf(1, "Cid %d: Wtime - %d, Rtime - %d, TAtime - %d\n",
-      i, wTime[i],rTime[i], ioTime[i]);
+      i, wTime[i],rTime[i], wTime[i]+rTime[i]+ ioTime[i]);
   }     
 
 }
