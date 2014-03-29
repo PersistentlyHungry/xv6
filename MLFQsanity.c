@@ -1,55 +1,95 @@
-// Test that fork fails gracefully.
-// Tiny executable so that the limit can be filling the proc table.
+
 
 #include "types.h"
 #include "stat.h"
 #include "user.h"
 
-#define N  1000
-/*
-void
-printf(int fd, char *s, ...)
-{
-  write(fd, s, strlen(s));
-}
-*/
+#define N  20
+#define P 500
+
 
 void
-foo()
+printChild(int cid)
 {
   int i;
-  for (i=0;i<100;i++)
-     printf(2, "wait test %d\n",i);
-  sleep(20);
-  for (i=0;i<100;i++)
-     printf(2, "wait test %d\n",i);
-
+  for (i=0;i<P;i++)
+     printf(1, "child %d prints for the %d time\n",cid ,i);
 }
 
 void
-waittest(void)
+mlfqtest(void)
 {
-  int wTime;
-  int rTime;
-  int ioTime;
-  int pid;
-  printf(1, "wait test\n");
+  int wTime[N];
+  int rTime[N];
+  int ioTime[N];
+  int pid[N];
+  int i, j,pidTemp,wTimeTemp, rTimeTemp, ioTimeTemp;
+  int wTimeAverage[3]={0,0,0}, rTimeAverage[3]={0,0,0}, ioTimeAverage[3]={0,0,0};
+  printf(1, "MLFQsanity test\n");
 
-
-    pid = fork();
-    if(pid == 0)
+  for(i=0;i<N;i++)
+  {
+    pid[i] = fork();
+    if(pid[i] == 0 && i%2==0)
     {
-      foo();
+      printChild(i);
       exit();      
     }
-    wait2(&wTime,&rTime,&ioTime);
-     printf(1, "hi \n");
-    printf(1, "wTime: %d rTime: %d ioTime: %d \n",wTime,rTime, ioTime);
+    else if(pid[i] == 0 && i%2==1)
+    {
+      sleep(1); // sould replace to i/o system call
+      printChild(i);
+      exit();      
+    }
+  }
+
+  for(i=0; i<N; i++)
+  {
+
+    pidTemp = wait2(&wTimeTemp,&rTimeTemp,&ioTimeTemp);
+    for(j=0;j<N;j++)
+    {
+      if(pid[j]==pidTemp)
+      {
+        wTimeAverage[0]+=wTimeTemp;
+        rTimeAverage[0]+=rTimeTemp;
+        ioTimeAverage[0]+=ioTimeTemp;
+        wTime[j]=wTimeTemp;
+        ioTime[j]=ioTimeTemp;
+        rTime[j]=rTimeTemp;
+        if(j%2==0)
+        {
+          wTimeAverage[1]+=wTimeTemp;
+          rTimeAverage[1]+=rTimeTemp;
+          ioTimeAverage[1]+=ioTimeTemp;
+        }
+        else
+        {
+          wTimeAverage[2]+=wTimeTemp;
+          rTimeAverage[2]+=rTimeTemp;
+          ioTimeAverage[2]+=ioTimeTemp;
+        }
+        continue;
+      }
+    }
+  }    
+  
+  printf(1, "Average: Wtime - %d, Rtime - %d, TAtime - %d\n",
+      wTimeAverage[0]/N,rTimeAverage[0]/N, ioTimeAverage[0]/N);
+  printf(1, "Average Low Piriority: Wtime - %d, Rtime - %d, TAtime - %d\n",
+      wTimeAverage[1]/(N/2),rTimeAverage[1]/(N/2), ioTimeAverage[1]/(N/2));
+  printf(1, "Average High Piriority: Wtime - %d, Rtime - %d, TAtime - %d\n",
+      wTimeAverage[2]/N,rTimeAverage[2]/N, ioTimeAverage[2]/N);
+  for(i=0; i<N; i++)
+  {
+    printf(1, "Cid %d: Wtime - %d, Rtime - %d, TAtime - %d\n",
+      i, wTime[i],rTime[i], ioTime[i]);
+  }     
 
 }
 int
 main(void)
 {
-  waittest();
+  mlfqtest();
   exit();
 } 
