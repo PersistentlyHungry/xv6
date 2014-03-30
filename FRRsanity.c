@@ -32,7 +32,6 @@ frrtest(void)
     pidTemp = fork();
     if(pidTemp == 0)
     {
-      //printf(1,"%d ***************************************************************************\n", getpid());
       printChild();
       exit();      
     }

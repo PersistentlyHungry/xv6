@@ -191,8 +191,8 @@ struct {
   uint e;  // Edit index - if press arrow-left this index save the rightest index
   uint f;  // Current edit index - Can move by arrows 
 } input;
-
-char History[20][INPUT_BUF];
+#define MAX_HISTORY_LENGTH 20
+char History[MAX_HISTORY_LENGTH][INPUT_BUF];
 int HistoryPos = 0;
 int MaxHistoryPos = 0;
 int HistoryWrite = 0;
@@ -281,7 +281,7 @@ consoleintr(int (*getc)(void))
     }
     case KEY_UP: // Key Up
     {
-      int NextHistoryPos = (HistoryPos + 20 - 1) % 20;
+      int NextHistoryPos = (HistoryPos + MAX_HISTORY_LENGTH - 1) % MAX_HISTORY_LENGTH;
       if(NextHistoryPos < MaxHistoryPos)
       {
         HistoryPos = NextHistoryPos;
@@ -294,7 +294,7 @@ consoleintr(int (*getc)(void))
     {
       if(HistoryPos < MaxHistoryPos)
       {
-        HistoryPos = (HistoryPos + 1) % 20;
+        HistoryPos = (HistoryPos + 1) % MAX_HISTORY_LENGTH;
         SelectFromHistory();
       }
       break;
@@ -315,8 +315,8 @@ consoleintr(int (*getc)(void))
               History[HistoryWrite][j] = input.buf[(input.w +j) % INPUT_BUF];
             }
             History[HistoryWrite][j] = '\0';
-            HistoryWrite = (HistoryWrite + 1) % 20;
-            MaxHistoryPos = (MaxHistoryPos == 20) ? 20 : (MaxHistoryPos + 1);
+            HistoryWrite = (HistoryWrite + 1) % MAX_HISTORY_LENGTH;
+            MaxHistoryPos = (MaxHistoryPos == MAX_HISTORY_LENGTH) ? MAX_HISTORY_LENGTH : (MaxHistoryPos + 1);
             HistoryPos = HistoryWrite;
           }  
 
