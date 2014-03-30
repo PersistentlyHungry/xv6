@@ -9,13 +9,13 @@
 
 #define QUEUESIZE NPROC
 
-struct {
+typedef struct {
         struct spinlock lock;
         struct proc * q[QUEUESIZE+1];   /* body of queue */
         int first;                      /* position of first element */
         int last;                       /* position of last element */
         int count;                      /* number of queue elements */
-} pqueue;
+} queue;
 
 struct {
   struct spinlock lock;
@@ -24,57 +24,83 @@ struct {
 
 static struct proc *initproc;
 
+static queue FRRqueue;
+
+struct {
+  queue low;
+  queue medium;
+  queue high;
+} multiQueue;
+
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+void InitQ(queue* pqueue, char* lockKey)
+{
+  // Init queue process
+  initlock(&pqueue->lock, lockKey);
+  pqueue->first = 0;
+  pqueue->last = NPROC-1;
+  pqueue->count = 0;
+}
+
 void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
 
-
-  // Init queue process
-  initlock(&pqueue.lock, "pqueue");
-  pqueue.first = 0;
-  pqueue.last = NPROC-1;
-  pqueue.count = 0;
+  InitQ(&FRRqueue, "FRR");
+  InitQ(&multiQueue.low, "LOW");
+  InitQ(&multiQueue.high, "HIGH");
+  InitQ(&multiQueue.medium, "MEDIUM");
 }
 
-void enqueue(struct proc * x)
+
+
+void enqueue(queue* pqueue, struct proc * x)
 {
+  int NeedQueue = 0;
+  #if defined (SCHED_FRR)  || defined (SCHED_FCFS)
+  if(pqueue == &FRRqueue)
+    NeedQueue = 1;
+  #endif 
+  #ifdef SCHED_3Q
+  if((pqueue == &multiQueue.low)||(pqueue==&multiQueue.medium)||(pqueue==&multiQueue.high))
+    NeedQueue = 1;
+  #endif      
 
+  if(NeedQueue)
+  {
+    acquire(&pqueue->lock);
 
-#if defined (SCHED_FRR)  || defined (SCHED_FCFS)
-        acquire(&pqueue.lock);
-   // cprintf("enqueue process %d \n", x->pid);
-        if (pqueue.count >= QUEUESIZE)
-              cprintf("Warning: queue overflow enqueue ");
-        else {
-                pqueue.last = (pqueue.last+1) % QUEUESIZE;
-                pqueue.q[ pqueue.last ] = x;  
-                
-                pqueue.count = pqueue.count + 1;
-        }
-        release(&pqueue.lock);
- #endif       
+    if (pqueue->count >= QUEUESIZE)
+          cprintf("Warning: queue overflow enqueue ");
+    else {
+            pqueue->last = (pqueue->last+1) % QUEUESIZE;
+            pqueue->q[ pqueue->last ] = x;  
+            
+            pqueue->count = pqueue->count + 1;
+    }
+    release(&pqueue->lock);
+  }
 }
 
-struct proc * dequeue()
+struct proc * dequeue(queue* pqueue)
 {
-        acquire(&pqueue.lock);
-        struct proc * x;
+    acquire(&pqueue->lock);
+    struct proc * x;
 
-        if (pqueue.count <= 0) cprintf("Warning: empty queue dequeue.\n");
-        else {
-                x = pqueue.q[ pqueue.first ];
-                pqueue.first = (pqueue.first+1) % QUEUESIZE;
-                pqueue.count = pqueue.count - 1;
-        }
-        release(&pqueue.lock);
-        return(x);
+    if (pqueue->count <= 0) cprintf("Warning: empty queue dequeue.\n");
+    else {
+            x = pqueue->q[ pqueue->first ];
+            pqueue->first = (pqueue->first+1) % QUEUESIZE;
+            pqueue->count = pqueue->count - 1;
+    }
+    release(&pqueue->lock);
+    return(x);
 }
 
 //PAGEBREAK: 32
@@ -97,7 +123,7 @@ allocproc(void)
 
 found:
   p->state = EMBRYO;
-  p->pid = nextpid++;
+  p->pid = nextpid++; 
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -151,7 +177,9 @@ userinit(void)
 
   p->state = RUNNABLE;
   p->ctime = ticks;
-  enqueue(p);
+  enqueue(&FRRqueue, p);
+  p->queuePriorty = MEDIUM;
+  enqueue(&multiQueue.medium,p);
 }
 
 // Grow current process's memory by n bytes.
@@ -210,7 +238,9 @@ fork(void)
 
   np->state = RUNNABLE;
   np->ctime = ticks;
-  enqueue(np);
+  enqueue(&FRRqueue, np);
+  np->queuePriorty = MEDIUM;
+  enqueue(&multiQueue.medium,np);
   np->iotime = 0;
   np-> rtime = 0;
   np-> etime = 0;
@@ -357,37 +387,56 @@ struct proc* NextProcess(struct proc *p)
 #endif
 
 #if defined (SCHED_FRR)  || defined (SCHED_FCFS)
-struct proc* FirstProcess()
-{
-  if(pqueue.count == 0)
-  {
-    return 0;
-  }
-  else
-  {
-    return dequeue();
-  }
-}
+
 
 struct proc* NextProcess(struct proc *p)
 {
-  if(pqueue.count == 0)
+  if(FRRqueue.count == 0)
   {
     return 0;
   }
   else
   {
-    return dequeue();
+    return dequeue(&FRRqueue);
   }
   
+}
+
+struct proc* FirstProcess()
+{
+  return NextProcess(0);
 }
 
 #endif
 
 
 
-#ifdef SCHED_Q3
+#ifdef SCHED_3Q
 
+struct proc* NextProcess(struct proc *p)
+{
+  if(multiQueue.high.count > 0)
+  {
+    return dequeue(&multiQueue.high);
+  }
+  else if(multiQueue.medium.count > 0)
+  {
+    return dequeue(&multiQueue.medium); 
+  }
+  else if(multiQueue.low.count > 0)
+  {
+    return dequeue(&multiQueue.low); 
+  }
+  else
+  {
+    return 0;
+  }
+}
+
+struct proc* FirstProcess()
+{
+  return NextProcess(0);
+}
 
 #endif
 
@@ -421,7 +470,7 @@ scheduler(void)
         proc = p;
         switchuvm(p);
         p->state = RUNNING;
-       // cprintf("Before Scheduler for %d \n", p->pid);
+        //  cprintf("Before Scheduler for %d \n", p->pid);
         swtch(&cpu->scheduler, proc->context);
         //cprintf("After Scheduler for %d \n", p->pid);
         switchkvm();
@@ -465,7 +514,21 @@ yield(void)
   acquire(&ptable.lock);  //DOC: yieldlock
   proc->state = RUNNABLE;
  // cprintf("yeild for %d \n", proc->pid);
-  enqueue(proc);
+  enqueue(&FRRqueue ,proc);
+
+  if(proc->queuePriorty == LOW)
+  {
+     enqueue(&multiQueue.low ,proc); 
+  }
+  else if(proc->queuePriorty == MEDIUM)
+  {
+    enqueue(&multiQueue.medium ,proc); 
+  }
+  else
+  {
+    enqueue(&multiQueue.high ,proc);   
+  }
+
   sched();
   release(&ptable.lock);
 }
@@ -527,6 +590,20 @@ sleep(void *chan, struct spinlock *lk)
   }
 }
 
+void PromoteOneLevel(struct proc *p)
+{
+      if(p->queuePriorty == LOW)
+      {
+         p->queuePriorty = MEDIUM;
+         enqueue(&multiQueue.medium ,p); 
+      }
+      else
+      {
+        p->queuePriorty = MEDIUM;
+        enqueue(&multiQueue.high ,p);   
+      }  
+}
+
 //PAGEBREAK!
 // Wake up all processes sleeping on chan.
 // The ptable lock must be held.
@@ -539,7 +616,9 @@ wakeup1(void *chan)
     if(p->state == SLEEPING && p->chan == chan)
     {
       p->state = RUNNABLE;
-      enqueue(p);
+      enqueue(&FRRqueue, p);
+      PromoteOneLevel(p);
+
     }
 }
 
@@ -585,7 +664,8 @@ kill(int pid)
       if(p->state == SLEEPING)
       {
         p->state = RUNNABLE;
-        enqueue(p);
+        enqueue(&FRRqueue, p);
+        PromoteOneLevel(p);
       }
       release(&ptable.lock);
       return 0;

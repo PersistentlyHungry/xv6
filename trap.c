@@ -104,12 +104,30 @@ trap(struct trapframe *tf)
   if(proc && proc->killed && (tf->cs&3) == DPL_USER)
     exit();
 
+
+  int needyield = 1;
+  #ifdef SCHED_Q3
+   if(proc->queuePriorty == LOW)
+   {
+     needyield = 0;    
+   } 
+   else if(proc->queuePriorty == MEDIUM)
+   {
+     proc->queuePriorty = LOW;   
+   }
+   else
+   {
+     proc->queuePriorty = MEDIUM;
+   }
+  #endif
+
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
   #ifndef SCHED_FCFS
-  if(proc && proc->state == RUNNING && tf->trapno == T_IRQ0+IRQ_TIMER && ((ticks % QUANTA) == 0))
-    yield();
+    if(needyield && proc && proc->state == RUNNING && tf->trapno == T_IRQ0+IRQ_TIMER && ((ticks % QUANTA) == 0))
+      yield();
   #endif
+  
 
   // Check if the process has been killed since we yielded
   if(proc && proc->killed && (tf->cs&3) == DPL_USER)

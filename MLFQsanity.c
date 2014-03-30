@@ -32,12 +32,21 @@ mlfqtest(void)
     pid[i] = fork();
     if(pid[i] == 0 && i%2==0)
     {
+      // Time Consuming operation
+      int x;
+      int y;
+      for (y=0;y<100000000;y++)
+      {
+        x = y % 7;
+      }
+      y=x;
+     
       printChild(i);
       exit();      
     }
     else if(pid[i] == 0 && i%2==1)
     {
-      sleep(1); // sould replace to i/o system call
+      printf(1, "IO system Call");
       printChild(i);
       exit();      
     }
@@ -77,9 +86,9 @@ mlfqtest(void)
   printf(1, "Average: Wtime - %d, Rtime - %d, TAtime - %d\n",
       wTimeAverage[0]/N,rTimeAverage[0]/N, (wTimeAverage[0]+rTimeAverage[0]+ioTimeAverage[0])/N);
   printf(1, "Average Low Piriority: Wtime - %d, Rtime - %d, TAtime - %d\n",
-      wTimeAverage[1]/(N/2),rTimeAverage[1]/(N/2), (wTimeAverage[1]+rTimeAverage[1]+ioTimeAverage[1])/N);
+      wTimeAverage[1]/(N/2),rTimeAverage[1]/(N/2), (wTimeAverage[1]+rTimeAverage[1]+ioTimeAverage[1])/(N/2));
   printf(1, "Average High Piriority: Wtime - %d, Rtime - %d, TAtime - %d\n",
-      wTimeAverage[2]/N,rTimeAverage[2]/N, (wTimeAverage[2]+rTimeAverage[2]+ioTimeAverage[2])/N);
+      wTimeAverage[2]/(N/2),rTimeAverage[2]/(N/2), (wTimeAverage[2]+rTimeAverage[2]+ioTimeAverage[2])/(N/2));
   for(i=0; i<N; i++)
   {
     printf(1, "Cid %d: Wtime - %d, Rtime - %d, TAtime - %d\n",
