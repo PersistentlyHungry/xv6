@@ -74,6 +74,8 @@ struct proc {
   uint iotime;                  // Process I/O time
   uint rtime;                   // Process running time
   int queuePriorty;            // Can be lown medium or high 
+  int pending;                  // signals bit alert
+  sighandler_t PendingFunctions[32]; // array of signals functions
 };
 
 // Process memory is laid out contiguously, low addresses first:

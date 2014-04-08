@@ -1,4 +1,5 @@
 struct stat;
+//typedef void (*sighandler_t)(void);
 
 // system calls
 int fork(void);
@@ -25,6 +26,10 @@ int uptime(void);
 int wait2(int*, int*, int*);
 //int export(char*);
 int add_path(char*);
+
+int signal(int , int);
+int sigsend(int , int );
+void alarm(int );
 
 // ulib.c
 int stat(char*, struct stat*);

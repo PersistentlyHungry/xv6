@@ -122,3 +122,44 @@ sys_add_path(void)
   //return 0;
   return add_path(path);
 }
+
+
+int
+sys_signal(void)
+{
+  int signum;
+  int handler;
+  if(argint(0,&signum)<0)
+    return -1;
+  if(argint(1,&handler)<0)
+    return -1;
+
+  return signal(signum, handler);
+//  return signal(signum, (sighandler_t)handler);
+}
+
+int
+sys_sigsend(void)
+{
+  int pid;
+  int signum;
+  if(argint(0,&pid)<0)
+    return -1;
+  if(argint(1,&signum)<0)
+    return -1;
+
+  return sigsend(pid, signum);
+}
+
+int
+sys_alarm(void)
+{
+  int ticks;
+
+  if(argint(0,&ticks)<0)
+    return -1;
+
+  alarm(ticks);
+
+  return 0;
+}

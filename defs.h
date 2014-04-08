@@ -8,6 +8,8 @@ struct spinlock;
 struct stat;
 struct superblock;
 
+typedef void (*sighandler_t)(void);
+
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -23,6 +25,13 @@ void            panic(char*) __attribute__((noreturn));
 // exec.c
 int             exec(char*, char**);
 int 			add_path(char* path);
+
+// signals
+//int 			signal(int signum, sighandler_t handler);
+int 			signal(int signum, int handler);
+int 			sigsend(int pid, int signum);
+void 			alarm(int ticks);
+
 
 // file.c
 struct file*    filealloc(void);

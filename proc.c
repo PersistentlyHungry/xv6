@@ -38,6 +38,11 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+void DefualtHandler(int pID)
+{
+  cprintf("A signal was accepted by process %d \n", pID);
+}
+
 void InitQ(queue* pqueue, char* lockKey)
 {
   // Init queue process
@@ -175,6 +180,15 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  // Init proc signal values
+  p->pending = 0;
+  int FuncIter;
+  for(FuncIter = 0; FuncIter < 32; ++FuncIter)
+  {
+    p->PendingFunctions[FuncIter] = 0;
+  }
+
+
   p->state = RUNNABLE;
   p->ctime = ticks;
   enqueue(&FRRqueue, p);
@@ -235,6 +249,15 @@ fork(void)
   np->cwd = idup(proc->cwd);
  
   pid = np->pid;
+
+  // Init proc signal values
+  np->pending = proc->pending;
+  int FuncIter;
+  for(FuncIter = 0; FuncIter < 32; ++FuncIter)
+  {
+    np->PendingFunctions[FuncIter] = proc->PendingFunctions[FuncIter];
+  }
+
 
   np->state = RUNNABLE;
   np->ctime = ticks;
@@ -348,6 +371,25 @@ wait(void)
   return wait2(&garbage, &garbage, &garbage);
 }
 
+
+int 
+signal(int signum, int handler)
+//signal(int signum, sighandler_t handler)
+{
+  return 0;
+}
+
+int 
+sigsend(int pid, int signum)
+{
+  return 0;
+}
+
+void 
+alarm(int ticks)
+{
+
+}
 
 void
 register_handler(sighandler_t sighandler)

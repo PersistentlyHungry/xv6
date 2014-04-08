@@ -15,11 +15,14 @@
 #define SYS_sleep  14
 #define SYS_uptime 15
 #define SYS_add_path  16
+#define SYS_signal  17
+#define SYS_sigsend  18
+#define SYS_alarm  19
 
-#define SYS_open   17
-#define SYS_write  18
-#define SYS_mknod  19
-#define SYS_unlink 20
-#define SYS_link   21
-#define SYS_mkdir  22
-#define SYS_close  23
+#define SYS_open   20
+#define SYS_write  21
+#define SYS_mknod  22
+#define SYS_unlink 23
+#define SYS_link   24
+#define SYS_mkdir  25
+#define SYS_close  26
