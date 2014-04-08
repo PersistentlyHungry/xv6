@@ -104,8 +104,10 @@ trap(struct trapframe *tf)
   if(proc && proc->killed && (tf->cs&3) == DPL_USER)
     exit();
 
+  #ifndef SCHED_FCFS
+    int needyield = 1;
+  #endif
 
-  int needyield = 1;
   #ifdef SCHED_Q3
    if(proc->queuePriorty == LOW)
    {
